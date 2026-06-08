@@ -181,6 +181,15 @@ export function parseCustomHeaders(value: string): Record<string, string> {
 		if (typeof raw !== "string") {
 			throw new Error("Custom header values must be strings.");
 		}
+		if (!ALLOWED_CUSTOM_HEADERS.has(key.toLowerCase())) {
+			throw new Error(`Custom header is not allowed: ${key}`);
+		}
+		if (key.length > 64 || raw.length > 512) {
+			throw new Error("Custom header names and values must be shorter.");
+		}
+		if (/[\r\n]/.test(key) || /[\r\n]/.test(raw)) {
+			throw new Error("Custom headers cannot contain control characters.");
+		}
 		if (/^authorization$/i.test(key)) {
 			continue;
 		}
@@ -191,6 +200,15 @@ export function parseCustomHeaders(value: string): Record<string, string> {
 	}
 	return headers;
 }
+
+const ALLOWED_CUSTOM_HEADERS = new Set([
+	"anthropic-version",
+	"openai-organization",
+	"openai-project",
+	"x-api-version",
+	"x-request-source",
+	"x-title"
+]);
 
 function combineAbortSignals(primary: AbortSignal, secondary?: AbortSignal): AbortSignal {
 	if (!secondary) {

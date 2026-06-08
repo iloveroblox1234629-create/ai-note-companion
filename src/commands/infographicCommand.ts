@@ -13,6 +13,7 @@ import {
 import { sanitizeSvg } from "../security/sanitizeSvg";
 import { InfographicTypeModal } from "../ui/InfographicTypeModal";
 import { ProgressModal } from "../ui/ResultModal";
+import { appendAuditLog } from "../security/auditLog";
 
 export async function createInfographicFromCurrentNote(plugin: AINoteCompanionPlugin): Promise<void> {
 	const selectedType = await new InfographicTypeModal(plugin.app, plugin.settings.infographicDefaultType).openAndAwait();
@@ -24,6 +25,8 @@ export async function createInfographicFromCurrentNote(plugin: AINoteCompanionPl
 	progress.open();
 
 	try {
+		plugin.checkEndpointAllowed();
+		plugin.checkRateLimit();
 		progress.setMessage("Reading note...");
 		const note = await readActiveNote(plugin.app, plugin.noteReadOptions());
 		if (note.content.trim().length === 0) {
@@ -36,6 +39,10 @@ export async function createInfographicFromCurrentNote(plugin: AINoteCompanionPl
 		}
 
 		const result = await runInfographicRequest(plugin, note.file.basename, note.content, selectedType, progress);
+		await appendAuditLog(plugin, {
+			requestType: "infographic",
+			linkedNotesIncluded: note.linkedFiles.length > 0
+		});
 		progress.setMessage("Creating note...");
 		const created = await createInfographicNote(plugin.app, plugin.settings.defaultOutputFolder, note.file, result, plugin.settings.model);
 		progress.close();
@@ -43,6 +50,11 @@ export async function createInfographicFromCurrentNote(plugin: AINoteCompanionPl
 	} catch (error) {
 		progress.close();
 		if (!/cancelled/i.test(plugin.toUserError(error))) {
+			void appendAuditLog(plugin, {
+				requestType: "error",
+				linkedNotesIncluded: false,
+				message: plugin.toUserError(error)
+			});
 			new Notice(`AI Note Companion: ${plugin.toUserError(error)}`);
 		}
 	}

@@ -35,13 +35,17 @@ describe("OpenAICompatibleProvider", () => {
 		});
 	});
 
-	it("parses custom headers and ignores authorization override", () => {
-		expect(parseCustomHeaders('{"X-Test":"yes","Authorization":"Bearer nope"}')).toEqual({
-			"X-Test": "yes"
+	it("parses allowed custom headers", () => {
+		expect(parseCustomHeaders('{"Anthropic-Version":"2023-06-01"}')).toEqual({
+			"Anthropic-Version": "2023-06-01"
 		});
 	});
 
 	it("rejects non-string custom header values", () => {
-		expect(() => parseCustomHeaders('{"X-Test":1}')).toThrow(/strings/);
+		expect(() => parseCustomHeaders('{"Anthropic-Version":1}')).toThrow(/strings/);
+	});
+
+	it("rejects forbidden custom headers", () => {
+		expect(() => parseCustomHeaders('{"Cookie":"session=abc"}')).toThrow(/not allowed/);
 	});
 });

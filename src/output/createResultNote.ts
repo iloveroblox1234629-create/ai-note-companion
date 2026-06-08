@@ -1,5 +1,6 @@
 import { App, normalizePath, TFile } from "obsidian";
 import type { GeneratedResult } from "../types";
+import { fencedMarkdownFallback, sanitizeAiMarkdown, scanAiOutput } from "../security/sanitizeAiOutput";
 
 export async function createResultNote(app: App, folderPath: string, result: GeneratedResult): Promise<TFile> {
 	await ensureFolder(app, folderPath);
@@ -49,9 +50,21 @@ export function buildGeneratedNote(result: GeneratedResult): string {
 		"",
 		`Source: [[${result.sourceFile.basename}]]`,
 		"",
-		result.content.trim(),
+		safeGeneratedContent(result.content).trim(),
 		""
 	].join("\n");
+}
+
+export function safeGeneratedContent(content: string): string {
+	const scan = scanAiOutput(content);
+	if (!scan.safe) {
+		return [
+			"> AI Note Companion rendered this result as fenced Markdown because suspicious active content was detected.",
+			"",
+			fencedMarkdownFallback(content)
+		].join("\n");
+	}
+	return sanitizeAiMarkdown(content);
 }
 
 export function safeFilename(name: string): string {
@@ -69,5 +82,11 @@ export function safeFilename(name: string): string {
 }
 
 function escapeYamlString(value: string): string {
-	return value.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+	return value
+		.replace(/\\/g, "\\\\")
+		.replace(/"/g, '\\"')
+		.replace(/\n/g, "\\n")
+		.replace(/\r/g, "\\r")
+		.replace(/\t/g, "\\t")
+		.replace(/[\u0000-\u001f\u007f]/g, "");
 }

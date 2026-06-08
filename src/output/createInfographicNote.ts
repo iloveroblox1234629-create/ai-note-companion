@@ -18,7 +18,16 @@ export async function createInfographicNote(
 export function buildInfographicNote(sourceFile: TFile, result: InfographicResult, model: string): string {
 	const generatedDate = new Date().toISOString();
 	const mermaidBlock = ["```mermaid", result.mermaid.trim(), "```"].join("\n");
-	const svgBlock = result.svg ? ["", "## SVG preview", "", result.svg.trim()].join("\n") : "";
+	const svgBlock = result.svg ? [
+		"",
+		"## SVG preview",
+		"",
+		"> SVG preview is sanitized and stored as fenced code for safety.",
+		"",
+		"```svg",
+		result.svg.trim().replace(/```/g, "'''"),
+		"```"
+	].join("\n") : "";
 
 	return [
 		"---",

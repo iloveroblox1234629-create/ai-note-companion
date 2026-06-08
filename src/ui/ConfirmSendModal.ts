@@ -1,9 +1,11 @@
 import { App, Modal, Setting } from "obsidian";
+import { endpointRequiresCustomWarning } from "../security/endpoints";
 
 export interface ConfirmSendDetails {
 	fileName: string;
 	linkedCount: number;
 	requireEveryTime: boolean;
+	endpointUrl?: string;
 }
 
 export class ConfirmSendModal extends Modal {
@@ -29,6 +31,13 @@ export class ConfirmSendModal extends Modal {
 			contentEl.createEl("p", {
 				cls: "ai-note-companion-warning",
 				text: `${this.details.linkedCount} linked note${this.details.linkedCount === 1 ? "" : "s"} will also be sent because linked notes are enabled.`
+			});
+		}
+
+		if (this.details.endpointUrl && endpointRequiresCustomWarning(this.details.endpointUrl)) {
+			contentEl.createEl("p", {
+				cls: "ai-note-companion-warning",
+				text: "This endpoint is not on the approved host list. Only continue if you trust it with note contents."
 			});
 		}
 

@@ -61,7 +61,9 @@ interface LLMProvider {
 
 The plugin shows a privacy warning before sending note content. API keys are stored through Obsidian plugin data storage and are never written to generated notes, notices, or logs. Debug logging is off by default and only logs sanitized operational metadata. Linked notes are disabled by default and trigger an explicit warning when enabled.
 
-SVG output is treated as untrusted model output. The sanitizer removes script tags, event handler attributes, external hrefs, foreignObject, remote style imports, and JavaScript URLs. SVGs must include accessible title and description elements or they are rejected.
+AI output is treated as untrusted model output. Markdown/HTML responses are scanned and sanitized before rendering or file creation, and suspicious responses fall back to fenced Markdown. SVG output is sanitized with DOMPurify plus extra defensive checks, then stored as fenced `svg` code rather than rendered raw. SVGs must include accessible title and description elements or they are rejected.
+
+Privacy acknowledgements are tied to endpoint and privacy-impacting settings. Changing endpoint, frontmatter inclusion, embed inclusion, or linked-note inclusion forces a fresh confirmation. A lightweight audit log records timestamp, endpoint domain, request type, and linked-note usage without note contents.
 
 ## Theme Compatibility
 

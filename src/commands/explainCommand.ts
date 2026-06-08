@@ -11,12 +11,15 @@ import {
 	explanationUserPrompt
 } from "../prompts/explainPrompt";
 import { ResultModal, ProgressModal } from "../ui/ResultModal";
+import { appendAuditLog } from "../security/auditLog";
 
 export async function explainCurrentNote(plugin: AINoteCompanionPlugin): Promise<void> {
 	const progress = new ProgressModal(plugin.app);
 	progress.open();
 
 	try {
+		plugin.checkEndpointAllowed();
+		plugin.checkRateLimit();
 		progress.setMessage("Reading note...");
 		const note = await readActiveNote(plugin.app, plugin.noteReadOptions());
 		if (note.content.trim().length === 0) {
@@ -29,6 +32,10 @@ export async function explainCurrentNote(plugin: AINoteCompanionPlugin): Promise
 		}
 
 		const content = await runExplainRequest(plugin, note.file.basename, note.content, progress);
+		await appendAuditLog(plugin, {
+			requestType: "explain",
+			linkedNotesIncluded: note.linkedFiles.length > 0
+		});
 		const result: GeneratedResult = {
 			mode: "explanation",
 			title: `${note.file.basename} - Explanation`,
@@ -46,6 +53,11 @@ export async function explainCurrentNote(plugin: AINoteCompanionPlugin): Promise
 	} catch (error) {
 		progress.close();
 		if (!/cancelled/i.test(plugin.toUserError(error))) {
+			void appendAuditLog(plugin, {
+				requestType: "error",
+				linkedNotesIncluded: false,
+				message: plugin.toUserError(error)
+			});
 			new Notice(`AI Note Companion: ${plugin.toUserError(error)}`);
 		}
 	}

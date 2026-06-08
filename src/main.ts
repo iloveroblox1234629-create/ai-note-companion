@@ -5,11 +5,14 @@ import { summarizeCurrentNote } from "./commands/summarizeCommand";
 import { sanitizeErrorMessage } from "./llm/LLMClient";
 import { AINoteCompanionSettingTab, DEFAULT_SETTINGS, migrateSettings } from "./settings";
 import type { AINoteCompanionSettings, NoteReadOptions } from "./types";
+import { RequestRateLimiter } from "./security/rateLimit";
+import { endpointConsentKey, endpointRequiresCustomWarning } from "./security/endpoints";
 import { CommandPaletteModal } from "./ui/CommandPaletteModal";
 import { ConfirmSendModal } from "./ui/ConfirmSendModal";
 
 export default class AINoteCompanionPlugin extends Plugin {
 	settings!: AINoteCompanionSettings;
+	private rateLimiter = new RequestRateLimiter(3, 60_000);
 
 	async onload(): Promise<void> {
 		await this.loadSettings();
@@ -61,6 +64,16 @@ export default class AINoteCompanionPlugin extends Plugin {
 		await this.saveData(this.settings);
 	}
 
+	checkEndpointAllowed(): void {
+		if (endpointRequiresCustomWarning(this.settings.endpointUrl) && !this.settings.allowCustomEndpoint) {
+			throw new Error("Custom endpoint requires explicit approval in AI Note Companion settings.");
+		}
+	}
+
+	checkRateLimit(): void {
+		this.rateLimiter.check();
+	}
+
 	noteReadOptions(): NoteReadOptions {
 		return {
 			includeFrontmatter: this.settings.includeFrontmatter,
@@ -70,7 +83,19 @@ export default class AINoteCompanionPlugin extends Plugin {
 	}
 
 	async confirmSend(file: TFile, linkedCount: number): Promise<boolean> {
-		const shouldShow = this.settings.confirmBeforeSending || !this.settings.acceptedPrivacyWarning || linkedCount > 0;
+		const contextKey = this.privacyContextKey();
+		const contextAccepted = this.settings.acceptedPrivacyContexts[contextKey] === true;
+		const endpointChanged = this.settings.lastAcceptedEndpointKey !== endpointConsentKey(this.settings.endpointUrl);
+		const frontmatterChanged = this.settings.lastAcceptedIncludeFrontmatter !== this.settings.includeFrontmatter;
+		const linkedChanged = this.settings.lastAcceptedIncludeLinkedNotes !== this.settings.includeLinkedNotes;
+		const shouldShow = this.settings.confirmBeforeSending ||
+			!contextAccepted ||
+			!this.settings.acceptedPrivacyWarning ||
+			endpointChanged ||
+			frontmatterChanged ||
+			linkedChanged ||
+			linkedCount > 0 ||
+			endpointRequiresCustomWarning(this.settings.endpointUrl);
 		if (!shouldShow) {
 			return true;
 		}
@@ -78,14 +103,28 @@ export default class AINoteCompanionPlugin extends Plugin {
 		const modal = new ConfirmSendModal(this.app, {
 			fileName: file.path,
 			linkedCount,
-			requireEveryTime: this.settings.confirmBeforeSending
+			requireEveryTime: this.settings.confirmBeforeSending,
+			endpointUrl: this.settings.endpointUrl
 		});
 		const result = await modal.openAndAwait();
-		if (result.accepted && result.rememberAccepted && !this.settings.confirmBeforeSending && linkedCount === 0) {
+		if (result.accepted && result.rememberAccepted && !this.settings.confirmBeforeSending) {
 			this.settings.acceptedPrivacyWarning = true;
+			this.settings.acceptedPrivacyContexts[contextKey] = true;
+			this.settings.lastAcceptedEndpointKey = endpointConsentKey(this.settings.endpointUrl);
+			this.settings.lastAcceptedIncludeFrontmatter = this.settings.includeFrontmatter;
+			this.settings.lastAcceptedIncludeLinkedNotes = this.settings.includeLinkedNotes;
 			await this.saveSettings();
 		}
 		return result.accepted;
+	}
+
+	private privacyContextKey(): string {
+		return [
+			endpointConsentKey(this.settings.endpointUrl),
+			`frontmatter=${this.settings.includeFrontmatter}`,
+			`linked=${this.settings.includeLinkedNotes}`,
+			`embeds=${this.settings.includeEmbeddedTransclusions}`
+		].join("|");
 	}
 
 	toUserError(error: unknown): string {

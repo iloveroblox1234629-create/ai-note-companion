@@ -3,6 +3,7 @@ import type AINoteCompanionPlugin from "../main";
 import type { GeneratedResult } from "../types";
 import { createResultNote } from "../output/createResultNote";
 import { insertBelowCurrentNote } from "../output/insertIntoNote";
+import { fencedMarkdownFallback, sanitizeAiMarkdown, scanAiOutput } from "../security/sanitizeAiOutput";
 
 export interface ResultModalOptions {
 	plugin: AINoteCompanionPlugin;
@@ -57,7 +58,17 @@ export class ResultModal extends Modal {
 			return;
 		}
 		this.contentContainer.empty();
-		await MarkdownRenderer.render(this.app, this.result.content, this.contentContainer, this.result.sourceFile.path, this.plugin);
+		const scan = scanAiOutput(this.result.content);
+		const markdown = scan.safe || this.plugin.settings.allowSuspiciousAiOutput
+			? sanitizeAiMarkdown(this.result.content)
+			: fencedMarkdownFallback(this.result.content);
+		if (!scan.safe && !this.plugin.settings.allowSuspiciousAiOutput) {
+			this.contentContainer.createEl("p", {
+				cls: "ai-note-companion-warning",
+				text: `${scan.blockedReason} Rendering as plain Markdown for safety.`
+			});
+		}
+		await MarkdownRenderer.render(this.app, markdown, this.contentContainer, this.result.sourceFile.path, this.plugin);
 	}
 
 	private async copyToClipboard(): Promise<void> {

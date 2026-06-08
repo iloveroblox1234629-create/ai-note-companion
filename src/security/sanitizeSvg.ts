@@ -1,3 +1,5 @@
+import { sanitizeWithDOMPurify } from "./dompurify";
+
 export interface SanitizedSvg {
 	svg: string;
 	removed: string[];
@@ -26,7 +28,13 @@ export function sanitizeSvg(input: string): SanitizedSvg {
 		throw new Error("SVG response did not start with an <svg> element.");
 	}
 
-	let svg = trimmed;
+	let svg = sanitizeWithDOMPurify(trimmed, {
+		USE_PROFILES: { svg: true, svgFilters: false },
+		FORBID_TAGS: ["script", "foreignObject", "iframe", "object", "embed", "image", "a", "style"],
+		FORBID_ATTR: ["onload", "onclick", "onerror", "href", "xlink:href", "src", "style"],
+		ALLOW_DATA_ATTR: false,
+		RETURN_TRUSTED_TYPE: false
+	});
 
 	for (const tag of DANGEROUS_TAGS) {
 		const blockPattern = new RegExp(`<${tag}\\b[\\s\\S]*?<\\/${tag}>`, "gi");
@@ -52,6 +60,14 @@ export function sanitizeSvg(input: string): SanitizedSvg {
 	if (JAVASCRIPT_URL_PATTERN.test(svg)) {
 		removed.push("javascript urls");
 		svg = svg.replace(JAVASCRIPT_URL_PATTERN, "none");
+	}
+	if (/url\(\s*['"]?(?:https?:|data:|javascript:)/i.test(svg)) {
+		removed.push("dangerous css urls");
+		svg = svg.replace(/url\(\s*['"]?(?:https?:|data:|javascript:)[\s\S]*?\)/gi, "none");
+	}
+	if (/filter\s*=\s*['"]\s*url\(/i.test(svg)) {
+		removed.push("filter urls");
+		svg = svg.replace(/\sfilter\s*=\s*(['"])\s*url\([\s\S]*?\)\1/gi, "");
 	}
 
 	if (!/<title[\s>]/i.test(svg) || !/<desc[\s>]/i.test(svg)) {

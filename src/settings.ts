@@ -9,6 +9,14 @@ import type {
 } from "./types";
 import { buildProvider } from "./llm/LLMClient";
 import { parseCustomHeaders } from "./llm/providers/OpenAICompatibleProvider";
+import { clearAuditLog, formatAuditLog, loadAuditLog } from "./security/auditLog";
+import { endpointRequiresCustomWarning } from "./security/endpoints";
+
+export const SAFE_LIMITS = {
+	maxOutputTokens: 8000,
+	contextWindow: 8000,
+	chunkSize: 24000
+};
 
 export const DEFAULT_SETTINGS: AINoteCompanionSettings = {
 	providerPreset: "openai-compatible",
@@ -19,7 +27,7 @@ export const DEFAULT_SETTINGS: AINoteCompanionSettings = {
 	customHeadersJson: "",
 	temperature: 0.3,
 	maxOutputTokens: 1800,
-	contextWindow: 12000,
+	contextWindow: SAFE_LIMITS.contextWindow,
 	requestTimeoutSeconds: 60,
 	retryCount: 1,
 	chunkSize: 6000,
@@ -30,11 +38,17 @@ export const DEFAULT_SETTINGS: AINoteCompanionSettings = {
 	summaryDestination: "modal",
 	infographicDefaultType: "auto",
 	enableSvgPreview: false,
+	allowSuspiciousAiOutput: false,
+	allowCustomEndpoint: false,
 	confirmBeforeSending: true,
 	includeFrontmatter: true,
 	includeEmbeddedTransclusions: false,
 	includeLinkedNotes: false,
 	acceptedPrivacyWarning: false,
+	acceptedPrivacyContexts: {},
+	lastAcceptedEndpointKey: "",
+	lastAcceptedIncludeFrontmatter: true,
+	lastAcceptedIncludeLinkedNotes: false,
 	debugLogging: false
 };
 
@@ -50,11 +64,11 @@ export function migrateSettings(data: unknown): AINoteCompanionSettings {
 	settings.summaryDestination = normalizeSummaryDestination(settings.summaryDestination);
 	settings.infographicDefaultType = normalizeInfographicType(settings.infographicDefaultType);
 	settings.temperature = clampNumber(settings.temperature, 0, 2, DEFAULT_SETTINGS.temperature);
-	settings.maxOutputTokens = clampInteger(settings.maxOutputTokens, 128, 32000, DEFAULT_SETTINGS.maxOutputTokens);
-	settings.contextWindow = clampInteger(settings.contextWindow, 1000, 1000000, DEFAULT_SETTINGS.contextWindow);
+	settings.maxOutputTokens = clampInteger(settings.maxOutputTokens, 128, SAFE_LIMITS.maxOutputTokens, DEFAULT_SETTINGS.maxOutputTokens);
+	settings.contextWindow = clampInteger(settings.contextWindow, 1000, SAFE_LIMITS.contextWindow, DEFAULT_SETTINGS.contextWindow);
 	settings.requestTimeoutSeconds = clampInteger(settings.requestTimeoutSeconds, 5, 600, DEFAULT_SETTINGS.requestTimeoutSeconds);
 	settings.retryCount = clampInteger(settings.retryCount, 0, 5, DEFAULT_SETTINGS.retryCount);
-	settings.chunkSize = clampInteger(settings.chunkSize, 1000, 100000, DEFAULT_SETTINGS.chunkSize);
+	settings.chunkSize = clampInteger(settings.chunkSize, 1000, SAFE_LIMITS.chunkSize, DEFAULT_SETTINGS.chunkSize);
 	settings.chunkOverlap = clampInteger(settings.chunkOverlap, 0, Math.floor(settings.chunkSize / 2), DEFAULT_SETTINGS.chunkOverlap);
 	settings.defaultOutputFolder = nonEmptyString(settings.defaultOutputFolder, DEFAULT_SETTINGS.defaultOutputFolder);
 	settings.defaultLanguageTone = nonEmptyString(settings.defaultLanguageTone, DEFAULT_SETTINGS.defaultLanguageTone);
@@ -64,11 +78,17 @@ export function migrateSettings(data: unknown): AINoteCompanionSettings {
 	settings.customHeadersJson = typeof settings.customHeadersJson === "string" ? settings.customHeadersJson : "";
 	settings.apiKey = typeof settings.apiKey === "string" ? settings.apiKey : "";
 	settings.enableSvgPreview = Boolean(settings.enableSvgPreview);
+	settings.allowSuspiciousAiOutput = Boolean(settings.allowSuspiciousAiOutput);
+	settings.allowCustomEndpoint = Boolean(settings.allowCustomEndpoint);
 	settings.confirmBeforeSending = Boolean(settings.confirmBeforeSending);
 	settings.includeFrontmatter = Boolean(settings.includeFrontmatter);
 	settings.includeEmbeddedTransclusions = Boolean(settings.includeEmbeddedTransclusions);
 	settings.includeLinkedNotes = Boolean(settings.includeLinkedNotes);
 	settings.acceptedPrivacyWarning = Boolean(settings.acceptedPrivacyWarning);
+	settings.acceptedPrivacyContexts = isStringBooleanRecord(settings.acceptedPrivacyContexts) ? settings.acceptedPrivacyContexts : {};
+	settings.lastAcceptedEndpointKey = typeof settings.lastAcceptedEndpointKey === "string" ? settings.lastAcceptedEndpointKey : "";
+	settings.lastAcceptedIncludeFrontmatter = Boolean(settings.lastAcceptedIncludeFrontmatter);
+	settings.lastAcceptedIncludeLinkedNotes = Boolean(settings.lastAcceptedIncludeLinkedNotes);
 	settings.debugLogging = Boolean(settings.debugLogging);
 
 	return settings;
@@ -109,14 +129,30 @@ export class AINoteCompanionSettingTab extends PluginSettingTab {
 
 		new Setting(containerEl)
 			.setName("Endpoint URL")
-			.setDesc("OpenAI-compatible chat completions endpoint.")
+			.setDesc("OpenAI-compatible chat completions endpoint. Approved hosts include api.openai.com, api.anthropic.com, localhost, 127.0.0.1, and ::1.")
 			.addText((text) => text
 				.setPlaceholder("https://api.example.com/v1/chat/completions")
 				.setValue(this.plugin.settings.endpointUrl)
 				.onChange(async (value) => {
 					this.plugin.settings.endpointUrl = value.trim();
+					if (endpointRequiresCustomWarning(this.plugin.settings.endpointUrl)) {
+						this.plugin.settings.allowCustomEndpoint = false;
+					}
 					await this.plugin.saveSettings();
+					this.display();
 				}));
+
+		if (endpointRequiresCustomWarning(this.plugin.settings.endpointUrl)) {
+			new Setting(containerEl)
+				.setName("Allow custom endpoint")
+				.setDesc("This endpoint is not on the approved host list. Enable only if you trust it with note content and API requests.")
+				.addToggle((toggle) => toggle
+					.setValue(this.plugin.settings.allowCustomEndpoint)
+					.onChange(async (value) => {
+						this.plugin.settings.allowCustomEndpoint = value;
+						await this.plugin.saveSettings();
+					}));
+		}
 
 		new Setting(containerEl)
 			.setName("API key")
@@ -184,12 +220,12 @@ export class AINoteCompanionSettingTab extends PluginSettingTab {
 			await this.plugin.saveSettings();
 		});
 
-		this.addNumberSetting("Max output tokens", "Maximum response size requested from the provider.", this.plugin.settings.maxOutputTokens, 128, 32000, 128, async (value) => {
+		this.addNumberSetting("Max output tokens", `Maximum response size requested from the provider. Hard maximum: ${SAFE_LIMITS.maxOutputTokens}.`, this.plugin.settings.maxOutputTokens, 128, SAFE_LIMITS.maxOutputTokens, 128, async (value) => {
 			this.plugin.settings.maxOutputTokens = Math.round(value);
 			await this.plugin.saveSettings();
 		});
 
-		this.addNumberSetting("Context window estimate", "Approximate model context window in tokens.", this.plugin.settings.contextWindow, 1000, 1000000, 1000, async (value) => {
+		this.addNumberSetting("Context window estimate", `Approximate model context window in tokens. Hard maximum: ${SAFE_LIMITS.contextWindow}.`, this.plugin.settings.contextWindow, 1000, SAFE_LIMITS.contextWindow, 1000, async (value) => {
 			this.plugin.settings.contextWindow = Math.round(value);
 			await this.plugin.saveSettings();
 		});
@@ -204,7 +240,7 @@ export class AINoteCompanionSettingTab extends PluginSettingTab {
 			await this.plugin.saveSettings();
 		});
 
-		this.addNumberSetting("Chunk size", "Approximate characters per chunk before map-reduce is used.", this.plugin.settings.chunkSize, 1000, 100000, 500, async (value) => {
+		this.addNumberSetting("Chunk size", `Approximate characters per chunk before map-reduce is used. Hard maximum: ${SAFE_LIMITS.chunkSize}.`, this.plugin.settings.chunkSize, 1000, SAFE_LIMITS.chunkSize, 500, async (value) => {
 			this.plugin.settings.chunkSize = Math.round(value);
 			await this.plugin.saveSettings();
 		});
@@ -278,11 +314,21 @@ export class AINoteCompanionSettingTab extends PluginSettingTab {
 
 		new Setting(containerEl)
 			.setName("Generate sanitized SVG preview")
-			.setDesc("Also ask the model for SVG markup, sanitize it, and embed it in the infographic note.")
+			.setDesc("Opt-in only. The model will be asked for SVG, sanitized, and embedded as a fenced code block.")
 			.addToggle((toggle) => toggle
 				.setValue(this.plugin.settings.enableSvgPreview)
 				.onChange(async (value) => {
 					this.plugin.settings.enableSvgPreview = value;
+					await this.plugin.saveSettings();
+				}));
+
+		new Setting(containerEl)
+			.setName("Allow suspicious AI output")
+			.setDesc("Advanced bypass. When off, responses containing scripts, command-like text, or secret-like patterns are shown as fenced Markdown instead of rendered.")
+			.addToggle((toggle) => toggle
+				.setValue(this.plugin.settings.allowSuspiciousAiOutput)
+				.onChange(async (value) => {
+					this.plugin.settings.allowSuspiciousAiOutput = value;
 					await this.plugin.saveSettings();
 				}));
 
@@ -328,6 +374,19 @@ export class AINoteCompanionSettingTab extends PluginSettingTab {
 				}));
 
 		new Setting(containerEl)
+			.setName("Reset privacy acknowledgements")
+			.setDesc("Forces the next AI request to show the privacy confirmation modal again.")
+			.addButton((button) => button
+				.setButtonText("Reset")
+				.onClick(async () => {
+					this.plugin.settings.acceptedPrivacyWarning = false;
+					this.plugin.settings.acceptedPrivacyContexts = {};
+					this.plugin.settings.lastAcceptedEndpointKey = "";
+					await this.plugin.saveSettings();
+					new Notice("AI Note Companion: privacy acknowledgements reset.");
+				}));
+
+		new Setting(containerEl)
 			.setName("Debug logging")
 			.setDesc("Logs sanitized operational metadata only. Note content and API keys are never logged.")
 			.addToggle((toggle) => toggle
@@ -335,6 +394,25 @@ export class AINoteCompanionSettingTab extends PluginSettingTab {
 				.onChange(async (value) => {
 					this.plugin.settings.debugLogging = value;
 					await this.plugin.saveSettings();
+				}));
+
+		containerEl.createEl("h3", { text: "Audit log" });
+
+		new Setting(containerEl)
+			.setName("View audit log")
+			.setDesc("Shows timestamp, endpoint domain, request type, and linked-note usage. Note content is not logged.")
+			.addButton((button) => button
+				.setButtonText("Copy log")
+				.onClick(async () => {
+					const entries = await loadAuditLog(this.plugin);
+					await navigator.clipboard.writeText(formatAuditLog(entries));
+					new Notice("AI Note Companion: audit log copied.");
+				}))
+			.addButton((button) => button
+				.setButtonText("Clear log")
+				.onClick(async () => {
+					await clearAuditLog(this.plugin);
+					new Notice("AI Note Companion: audit log cleared.");
 				}));
 	}
 
@@ -371,6 +449,13 @@ export class AINoteCompanionSettingTab extends PluginSettingTab {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === "object" && value !== null;
+}
+
+function isStringBooleanRecord(value: unknown): value is Record<string, boolean> {
+	if (!isRecord(value)) {
+		return false;
+	}
+	return Object.values(value).every((entry) => typeof entry === "boolean");
 }
 
 function clampNumber(value: unknown, min: number, max: number, fallback: number): number {

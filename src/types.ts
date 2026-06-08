@@ -39,11 +39,17 @@ export interface AINoteCompanionSettings {
 	summaryDestination: SummaryDestination;
 	infographicDefaultType: InfographicType;
 	enableSvgPreview: boolean;
+	allowSuspiciousAiOutput: boolean;
+	allowCustomEndpoint: boolean;
 	confirmBeforeSending: boolean;
 	includeFrontmatter: boolean;
 	includeEmbeddedTransclusions: boolean;
 	includeLinkedNotes: boolean;
 	acceptedPrivacyWarning: boolean;
+	acceptedPrivacyContexts: Record<string, boolean>;
+	lastAcceptedEndpointKey: string;
+	lastAcceptedIncludeFrontmatter: boolean;
+	lastAcceptedIncludeLinkedNotes: boolean;
 	debugLogging: boolean;
 }
 

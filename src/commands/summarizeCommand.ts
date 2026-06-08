@@ -13,12 +13,15 @@ import {
 	summaryUserPrompt
 } from "../prompts/summarizePrompt";
 import { ResultModal, ProgressModal } from "../ui/ResultModal";
+import { appendAuditLog } from "../security/auditLog";
 
 export async function summarizeCurrentNote(plugin: AINoteCompanionPlugin): Promise<void> {
 	const progress = new ProgressModal(plugin.app);
 	progress.open();
 
 	try {
+		plugin.checkEndpointAllowed();
+		plugin.checkRateLimit();
 		progress.setMessage("Reading note...");
 		const note = await readActiveNote(plugin.app, plugin.noteReadOptions());
 		if (note.content.trim().length === 0) {
@@ -31,6 +34,10 @@ export async function summarizeCurrentNote(plugin: AINoteCompanionPlugin): Promi
 		}
 
 		const content = await runSummaryRequest(plugin, note.file.basename, note.content, progress);
+		await appendAuditLog(plugin, {
+			requestType: "summarize",
+			linkedNotesIncluded: note.linkedFiles.length > 0
+		});
 		const result: GeneratedResult = {
 			mode: "summary",
 			title: `${note.file.basename} - Summary`,
@@ -63,6 +70,11 @@ export async function summarizeCurrentNote(plugin: AINoteCompanionPlugin): Promi
 	} catch (error) {
 		progress.close();
 		if (!/cancelled/i.test(plugin.toUserError(error))) {
+			void appendAuditLog(plugin, {
+				requestType: "error",
+				linkedNotesIncluded: false,
+				message: plugin.toUserError(error)
+			});
 			new Notice(`AI Note Companion: ${plugin.toUserError(error)}`);
 		}
 	}

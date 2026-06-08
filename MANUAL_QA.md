@@ -33,6 +33,10 @@ Run these checks in a test vault before publishing.
 - [ ] API key is absent from notices, console output, generated notes, and errors.
 - [ ] Linked notes off by default.
 - [ ] Linked notes on warns that additional files will be sent.
+- [ ] Changing endpoint URL forces a fresh privacy confirmation.
+- [ ] Changing frontmatter or linked-note inclusion forces a fresh privacy confirmation.
+- [ ] Reset privacy acknowledgements forces the next request to confirm again.
+- [ ] Audit log copy/clear works and contains no note text.
 
 ## Theme Compatibility
 
@@ -47,4 +51,13 @@ Run these checks in a test vault before publishing.
 - [ ] Mind map request produces Mermaid mindmap syntax.
 - [ ] Timeline request produces Mermaid timeline syntax when note is chronological.
 - [ ] SVG preview enabled embeds sanitized SVG.
+- [ ] SVG preview is stored as fenced `svg` code instead of raw rendered SVG.
 - [ ] SVG sanitizer rejects markup with scripts, event handlers, foreignObject, or missing title/desc.
+
+## Security Hardening
+
+- [ ] Custom endpoint is blocked until explicitly allowed in settings.
+- [ ] Forbidden custom headers such as Cookie, Referer, and User-Agent are rejected.
+- [ ] Four rapid requests trigger the rate limit.
+- [ ] AI response containing `<script>` is rendered as fenced Markdown unless the advanced bypass is enabled.
+- [ ] Prompt-injection warning is present in README.

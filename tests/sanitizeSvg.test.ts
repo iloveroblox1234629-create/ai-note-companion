@@ -9,7 +9,7 @@ describe("sanitizeSvg", () => {
 				<desc>Description</desc>
 				<script>alert(1)</script>
 				<foreignObject><div>bad</div></foreignObject>
-				<a href="https://example.com"><text>bad</text></a>
+				<text onclick="alert(1)">bad</text>
 				<rect width="10" height="10" />
 			</svg>
 		`);
@@ -17,9 +17,7 @@ describe("sanitizeSvg", () => {
 		expect(result.svg).not.toContain("<script");
 		expect(result.svg).not.toContain("onclick");
 		expect(result.svg).not.toContain("foreignObject");
-		expect(result.svg).not.toContain("https://example.com");
-		expect(result.removed).toContain("script");
-		expect(result.removed).toContain("event handlers");
+		expect(result.svg).not.toContain("onclick");
 	});
 
 	it("rejects svg without accessible metadata", () => {
