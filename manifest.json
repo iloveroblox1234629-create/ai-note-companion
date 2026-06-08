@@ -1,0 +1,11 @@
+{
+	"id": "ai-note-companion",
+	"name": "AI Note Companion",
+	"version": "0.1.0",
+	"minAppVersion": "1.5.0",
+	"description": "Explain, summarize, and turn active notes into AI-generated study aids from configurable LLM endpoints.",
+	"author": "",
+	"authorUrl": "",
+	"fundingUrl": "",
+	"isDesktopOnly": false
+}

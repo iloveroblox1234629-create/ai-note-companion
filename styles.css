@@ -1,0 +1,149 @@
+.ai-note-companion {
+	color: var(--text-normal);
+	font-family: var(--font-interface);
+}
+
+.ai-note-companion h2,
+.ai-note-companion h3 {
+	color: var(--text-normal);
+}
+
+.ai-note-companion p {
+	line-height: 1.5;
+}
+
+.ai-note-companion .setting-item {
+	border-color: var(--background-modifier-border);
+}
+
+.ai-note-companion-settings-textarea {
+	min-height: 5rem;
+	font-family: var(--font-monospace);
+}
+
+.ai-note-companion-input-error {
+	border-color: var(--text-error, #c33);
+}
+
+.ai-note-companion-warning {
+	padding: 0.75rem;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-s);
+	background: var(--background-secondary);
+	color: var(--text-normal);
+}
+
+.ai-note-companion-muted {
+	color: var(--text-muted);
+	font-size: var(--font-ui-small);
+}
+
+.ai-note-companion-button-row {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.5rem;
+	margin: 1rem 0;
+}
+
+.ai-note-companion-button-row button,
+.ai-note-companion-choice-grid button,
+.ai-note-companion-action-button {
+	border-radius: var(--radius-s);
+	background: var(--interactive-normal);
+	color: var(--text-normal);
+}
+
+.ai-note-companion-button-row button:hover,
+.ai-note-companion-choice-grid button:hover,
+.ai-note-companion-action-button:hover {
+	background: var(--interactive-hover);
+}
+
+.ai-note-companion-result {
+	max-height: min(65vh, 48rem);
+	overflow: auto;
+	padding: 1rem;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-m);
+	background: var(--background-primary);
+}
+
+.ai-note-companion-choice-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+	gap: 0.5rem;
+	margin: 1rem 0;
+}
+
+.ai-note-companion-choice-grid button {
+	min-height: 3rem;
+	text-align: left;
+	white-space: normal;
+}
+
+.ai-note-companion-choice-grid button.is-selected {
+	background: var(--interactive-accent);
+	color: var(--text-on-accent);
+}
+
+.ai-note-companion-progress {
+	position: relative;
+	overflow: hidden;
+	height: 0.5rem;
+	margin: 1rem 0;
+	border-radius: var(--radius-s);
+	background: var(--background-secondary);
+}
+
+.ai-note-companion-progress div {
+	position: absolute;
+	width: 40%;
+	height: 100%;
+	border-radius: var(--radius-s);
+	background: var(--interactive-accent);
+	animation: ai-note-companion-progress 1.2s ease-in-out infinite;
+}
+
+.ai-note-companion-action-list {
+	display: grid;
+	gap: 0.75rem;
+	margin-top: 1rem;
+}
+
+.ai-note-companion-action-button {
+	display: flex;
+	flex-direction: column;
+	align-items: flex-start;
+	gap: 0.25rem;
+	width: 100%;
+	padding: 0.875rem;
+	text-align: left;
+	white-space: normal;
+}
+
+.ai-note-companion-action-title {
+	font-weight: 600;
+	color: var(--text-normal);
+}
+
+@keyframes ai-note-companion-progress {
+	0% {
+		transform: translateX(-100%);
+	}
+	50% {
+		transform: translateX(100%);
+	}
+	100% {
+		transform: translateX(260%);
+	}
+}
+
+@media (max-width: 520px) {
+	.ai-note-companion-button-row {
+		flex-direction: column;
+	}
+
+	.ai-note-companion-button-row button {
+		width: 100%;
+	}
+}

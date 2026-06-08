@@ -1,0 +1,29 @@
+{
+	"name": "ai-note-companion",
+	"version": "0.1.0",
+	"description": "AI Note Companion Obsidian plugin",
+	"main": "main.js",
+	"scripts": {
+		"dev": "node esbuild.config.mjs",
+		"build": "tsc -noEmit -skipLibCheck && node esbuild.config.mjs production",
+		"test": "vitest run",
+		"version": "node version-bump.mjs && git add manifest.json versions.json"
+	},
+	"keywords": [
+		"obsidian",
+		"obsidian-plugin",
+		"ai",
+		"notes"
+	],
+	"author": "",
+	"license": "MIT",
+	"devDependencies": {
+		"@types/node": "^22.15.30",
+		"builtin-modules": "^5.0.0",
+		"esbuild": "^0.25.5",
+		"obsidian": "latest",
+		"tslib": "^2.8.1",
+		"typescript": "^5.8.3",
+		"vitest": "^3.2.2"
+	}
+}

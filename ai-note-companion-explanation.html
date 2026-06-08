@@ -1,0 +1,251 @@
+<!doctype html>
+<html lang="en">
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>AI Note Companion - Full Implementation Explanation</title>
+	<style>
+		:root {
+			color-scheme: light dark;
+			--page: #f6f7f9;
+			--panel: #ffffff;
+			--text: #20242a;
+			--muted: #5c6470;
+			--border: #d8dde5;
+			--accent: #4c6fff;
+			--code: #eef1f6;
+		}
+
+		@media (prefers-color-scheme: dark) {
+			:root {
+				--page: #14171c;
+				--panel: #1d222a;
+				--text: #eef2f7;
+				--muted: #aab3c2;
+				--border: #343c49;
+				--accent: #8aa2ff;
+				--code: #252c36;
+			}
+		}
+
+		body {
+			margin: 0;
+			background: var(--page);
+			color: var(--text);
+			font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+			line-height: 1.6;
+		}
+
+		main {
+			width: min(960px, calc(100% - 32px));
+			margin: 0 auto;
+			padding: 40px 0 56px;
+		}
+
+		header,
+		section {
+			background: var(--panel);
+			border: 1px solid var(--border);
+			border-radius: 10px;
+			padding: 24px;
+			margin-bottom: 20px;
+		}
+
+		h1,
+		h2,
+		h3 {
+			line-height: 1.2;
+			margin-top: 0;
+		}
+
+		h1 {
+			font-size: 2rem;
+			margin-bottom: 8px;
+		}
+
+		h2 {
+			font-size: 1.35rem;
+			border-bottom: 1px solid var(--border);
+			padding-bottom: 8px;
+		}
+
+		code,
+		pre {
+			background: var(--code);
+			border-radius: 6px;
+		}
+
+		code {
+			padding: 2px 5px;
+		}
+
+		pre {
+			overflow: auto;
+			padding: 14px;
+		}
+
+		a {
+			color: var(--accent);
+		}
+
+		.meta {
+			color: var(--muted);
+			margin: 0;
+		}
+
+		.grid {
+			display: grid;
+			grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+			gap: 14px;
+		}
+
+		.card {
+			border: 1px solid var(--border);
+			border-radius: 8px;
+			padding: 14px;
+			background: color-mix(in srgb, var(--panel), var(--page) 35%);
+		}
+
+		.card h3 {
+			margin-bottom: 6px;
+		}
+	</style>
+</head>
+<body>
+	<main>
+		<header>
+			<h1>AI Note Companion</h1>
+			<p class="meta">Full implementation explanation for the Obsidian community plugin project.</p>
+		</header>
+
+		<section>
+			<h2>Purpose</h2>
+			<p>
+				AI Note Companion is a TypeScript Obsidian plugin that helps a user work with the entire active Markdown note.
+				It can explain the note as a tutor, summarize it into structured sections, and create visual study aids as Mermaid
+				diagrams with optional sanitized SVG previews. The plugin is designed around configurable AI endpoints, privacy
+				confirmation, long-note chunking, and native Obsidian UI conventions.
+			</p>
+		</section>
+
+		<section>
+			<h2>User Workflows</h2>
+			<div class="grid">
+				<div class="card">
+					<h3>Explain Current Note</h3>
+					<p>
+						The command reads the full active Markdown file through Obsidian vault APIs and asks the configured model
+						for a learner-focused explanation. The response is organized into big picture, key concepts, step-by-step
+						explanation, definitions, potential confusions, and questions to test understanding.
+					</p>
+				</div>
+				<div class="card">
+					<h3>Summarize Current Note</h3>
+					<p>
+						The summary command uses the full file and produces an executive summary, bullet takeaways, important
+						terms, action items, and open questions. The user can choose brief, standard, or detailed output and can
+						show the result in a modal, append it to the current note, or create a generated note.
+					</p>
+				</div>
+				<div class="card">
+					<h3>Create Infographic</h3>
+					<p>
+						The infographic command prompts the user for a diagram type, generates Mermaid code, and creates a new
+						Markdown note containing the diagram, metadata, a backlink to the source, and an optional sanitized SVG
+						preview when enabled.
+					</p>
+				</div>
+			</div>
+		</section>
+
+		<section>
+			<h2>Architecture</h2>
+			<p>
+				The source code is split into focused modules under <code>src/</code>. The main plugin class registers commands,
+				the ribbon icon, and the settings tab. Command modules own the user workflows. Note modules handle reading,
+				frontmatter stripping, embed expansion, linked-note gathering, and Markdown chunking. Output modules create
+				generated notes safely. Prompt modules keep model instructions separate from command orchestration. Provider
+				modules isolate HTTP request formatting so additional AI backends can be added without rewriting commands.
+			</p>
+			<pre><code>src/
+  main.ts
+  settings.ts
+  types.ts
+  llm/
+  commands/
+  note/
+  ui/
+  output/
+  prompts/
+  security/</code></pre>
+		</section>
+
+		<section>
+			<h2>Long Note Handling</h2>
+			<p>
+				The plugin estimates when a note is too large for the configured context window. When needed, it splits Markdown
+				by headings first, paragraphs second, and character ranges as a final fallback. Each chunk keeps note title,
+				chunk number, total chunk count, and heading context. Explain and summary commands then perform map-reduce:
+				each chunk is analyzed first, and a final synthesis request merges those partial results into one whole-note
+				answer.
+			</p>
+		</section>
+
+		<section>
+			<h2>Settings and Providers</h2>
+			<p>
+				The settings tab exposes provider preset, endpoint URL, API key, model name, custom headers, request parameters,
+				output folder, summary detail level, infographic type, privacy toggles, and debug logging. The default request
+				format is OpenAI-compatible chat completions. A clean <code>LLMProvider</code> interface supports future adapters.
+			</p>
+			<pre><code>interface LLMProvider {
+  complete(request: LLMRequest): Promise&lt;LLMResponse&gt;;
+  testConnection(): Promise&lt;void&gt;;
+}</code></pre>
+		</section>
+
+		<section>
+			<h2>Privacy and Safety</h2>
+			<p>
+				The plugin shows a privacy warning before sending note content. API keys are stored through Obsidian plugin data
+				storage and are never written to generated notes, notices, or logs. Debug logging is off by default and only logs
+				sanitized operational metadata. Linked notes are disabled by default and trigger an explicit warning when enabled.
+			</p>
+			<p>
+				SVG output is treated as untrusted model output. The sanitizer removes script tags, event handler attributes,
+				external hrefs, foreignObject, remote style imports, and JavaScript URLs. SVGs must include accessible title and
+				description elements or they are rejected.
+			</p>
+		</section>
+
+		<section>
+			<h2>Theme Compatibility</h2>
+			<p>
+				Plugin UI styles are scoped under <code>.ai-note-companion</code> and rely on Obsidian CSS variables for background,
+				text, borders, radius, interactive controls, and fonts. This keeps modals, settings, buttons, and result views
+				consistent with installed light, dark, and community themes.
+			</p>
+		</section>
+
+		<section>
+			<h2>Generated Output</h2>
+			<p>
+				Generated notes default to the <code>AI Note Companion</code> folder. The plugin creates the folder when missing,
+				derives safe filenames from the source note title, avoids collisions by appending a number, and writes frontmatter
+				with source path, generated timestamp, mode, and model. Each generated note links back to the source note.
+			</p>
+		</section>
+
+		<section>
+			<h2>Build and Test Status</h2>
+			<p>The implementation was validated with:</p>
+			<pre><code>npm run build
+npm run test</code></pre>
+			<p>
+				The passing tests cover Markdown chunking, provider request formatting, settings defaults and migration, SVG
+				sanitization, and safe filename generation.
+			</p>
+		</section>
+	</main>
+</body>
+</html>
